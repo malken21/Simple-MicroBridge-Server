@@ -34,8 +34,8 @@ jobs:
       - name: Set lower case owner and repo name
         run: |
           echo "REPO_NAME=${GITHUB_REPOSITORY#*/}" >> $GITHUB_ENV
-          echo "REPO_NAME_LOW=${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]' > repo_name_low.txt
-          echo "REPO_NAME_LOW=$(cat repo_name_low.txt)" >> $GITHUB_ENV
+          REPO_NAME_LOW=$(echo "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')
+          echo "REPO_NAME_LOW=$REPO_NAME_LOW" >> $GITHUB_ENV
 
       - name: Install System Dependencies (Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
@@ -71,13 +71,13 @@ jobs:
       - name: Rename Binary for Release
         shell: bash
         run: |
-          cp ${{ steps.bin.outputs.path }} ${{ env.REPO_NAME_LOW }}-${{ matrix.asset_name }}
+          cp ${{ steps.bin.outputs.path }} ${{ matrix.asset_name }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.REPO_NAME_LOW }}-${{ matrix.asset_name }}
-          path: ${{ env.REPO_NAME_LOW }}-${{ matrix.asset_name }}
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.asset_name }}
 
   release:
     name: Create GitHub Release
