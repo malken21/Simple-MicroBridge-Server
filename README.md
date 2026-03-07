@@ -38,8 +38,14 @@ cargo run --release -- [OPTIONS]
 
 ### オプション
 
-- `-d, --device-name <DEVICE_NAME>`
-  接続対象のMicro:bitのデバイス名に含まれる文字列。デフォルト: `BBC micro:bit`
+- `-i, --id <ID>`
+  接続先のMicro:bitの5文字の識別ID（例: `zagic`）。指定された場合は「BBC micro:bit [zagic]」を完全一致で検索します。
+- `-n, --name <NAME>`
+  接続対象のMicro:bitのデバイス名に含まれる文字列（部分一致）。デフォルト: `BBC micro:bit`
+- `--exact`
+  デバイス名（`--name`で指定した文字列）の完全一致を要求します。
+- `--mac <MAC>`
+  接続先のMACアドレス（Windowsの場合は内部のデバイスID）で特定します。
 - `-p, --port <PORT>`
   PC側（ユーザーアプリ側）と通信するWebSocketサーバのベースポート番号。デフォルト: `4000`
 
