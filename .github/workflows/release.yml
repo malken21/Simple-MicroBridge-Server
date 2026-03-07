@@ -31,13 +31,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set lower case owner and repo name
-        shell: bash
-        run: |
-          echo "REPO_NAME=${GITHUB_REPOSITORY#*/}" >> $GITHUB_ENV
-          REPO_NAME_LOW=$(echo "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')
-          echo "REPO_NAME_LOW=$REPO_NAME_LOW" >> $GITHUB_ENV
-
       - name: Install System Dependencies (Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
@@ -64,9 +57,9 @@ jobs:
             TARGET_DIR="target/${{ matrix.target }}/release"
           fi
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "path=${TARGET_DIR}/${{ env.REPO_NAME_LOW }}.exe" >> $GITHUB_OUTPUT
+            echo "path=${TARGET_DIR}/microbridge.exe" >> $GITHUB_OUTPUT
           else
-            echo "path=${TARGET_DIR}/${{ env.REPO_NAME_LOW }}" >> $GITHUB_OUTPUT
+            echo "path=${TARGET_DIR}/microbridge" >> $GITHUB_OUTPUT
           fi
 
       - name: Rename Binary for Release
