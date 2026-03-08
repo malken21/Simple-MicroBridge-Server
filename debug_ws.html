@@ -185,10 +185,22 @@
 
         let ws = null;
 
-        function addLog(message) {
+        function addLog(message, isError = false) {
             const entry = document.createElement('div');
             entry.className = 'log-entry';
-            entry.innerHTML = `<span class="log-time">[${new Date().toLocaleTimeString()}]</span> ${message}`;
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'log-time';
+            timeSpan.textContent = `[${new Date().toLocaleTimeString()}] `;
+
+            const messageSpan = document.createElement('span');
+            if (isError) {
+                messageSpan.style.color = 'var(--error-color)';
+            }
+            messageSpan.textContent = message;
+
+            entry.appendChild(timeSpan);
+            entry.appendChild(messageSpan);
             logContainer.appendChild(entry);
             logContainer.scrollTop = logContainer.scrollHeight;
         }
@@ -215,7 +227,7 @@
             };
 
             ws.onerror = (error) => {
-                addLog(`<span style="color: var(--error-color)">Error: Connection failed. Ensure MicroBridge is running.</span>`);
+                addLog('Error: Connection failed. Ensure MicroBridge is running.', true);
             };
 
             ws.onmessage = (event) => {
