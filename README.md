@@ -1,4 +1,4 @@
-# microbridge
+# MicroBridge
 
 Micro:bit とローカルPC上のアプリケーション間で、Bluetooth Low Energy (BLE) と WebSocket を用いて双方向通信を中継（ブリッジ）するRust製のサイドカープロセスです。
 
