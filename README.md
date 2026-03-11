@@ -6,6 +6,9 @@ Micro:bit とローカルPC上のアプリケーション間で、Bluetooth Low 
 
 - **BLE Nordic UART Service (NUS)** を使用し、Micro:bitのシリアル通信をWebSocketメッセージに変換します。
 - OS（Windows等）ですでにペアリングされている Micro:bit を自動検出し、WebSocket ポートにルーティングします。
+- **USB接続時の自動切断・再開機能**: Micro:bitのUSB接続を検出し、BLE通信を自動的に制御します。
+  - **動作**: USB接続中はBLE通信を切断し、USBが取り外されると自動的にBLE通信（再検索・接続）を再開します。
+  - **導入背景**: Micro:bitは、BLE接続が維持されている状態ではMakeCode等からのUSB経由（WebUSB等）によるプログラム書き込みができません。本機能により、書き込みのたびに手動で通信を切断する手間を省き、スムーズな開発フローを実現します。
 - 単一の Micro:bit との安定した通信に特化しており、切断時の自動再試行機能を備えています。
 
 ## アーキテクチャ

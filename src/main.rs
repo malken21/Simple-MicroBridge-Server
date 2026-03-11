@@ -3,10 +3,14 @@ use btleplug::platform::{Manager, Peripheral};
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use uuid::Uuid;
+use serialport;
 
 // Nordic UART Service (NUS) の UUID
 const NUS_RX_CHARACTERISTIC_UUID: Uuid = Uuid::from_u128(0x6e400003_b5a3_f393_e0a9_e50e24dcca9e);
 const NUS_TX_CHARACTERISTIC_UUID: Uuid = Uuid::from_u128(0x6e400002_b5a3_f393_e0a9_e50e24dcca9e);
+
+const MICROBIT_VID: u16 = 0x0d28;
+const MICROBIT_PID: u16 = 0x0204;
 
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about = "Micro:bit BLE to WebSocket Bridge", long_about = None)]
@@ -55,6 +59,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn is_microbit_usb_connected() -> bool {
+    if let Ok(ports) = serialport::available_ports() {
+        for port in ports {
+            if let serialport::SerialPortType::UsbPort(info) = port.port_type {
+                if info.vid == MICROBIT_VID && info.pid == MICROBIT_PID {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 async fn run_bridge(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let (shutdown_tx, _) = tokio::sync::broadcast::channel::<()>(1);
     let shutdown_tx_clone = shutdown_tx.clone();
@@ -69,48 +86,53 @@ async fn run_bridge(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let adapters = manager.adapters().await?;
     let central = adapters.into_iter().next().ok_or("No Bluetooth adapters found")?;
 
-    let mut current_peripheral = loop {
+    let mut shutdown_rx = shutdown_tx.subscribe();
+    
+    loop {
+        if is_microbit_usb_connected() {
+            println!("Micro:bit detected via USB. BLE bridge suspended.");
+            tokio::select! {
+                _ = shutdown_rx.recv() => break,
+                _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => continue,
+            }
+        }
+
         println!("Starting BLE scan to detect device...");
         central.start_scan(ScanFilter::default()).await?;
-        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-        let _ = central.stop_scan().await;
-
-        if let Some(peripheral) = find_target_peripheral(&central, &args).await? {
-            break peripheral;
-        }
-        let target_desc = args.id.as_deref().unwrap_or(&args.name);
-        println!("No device found matching '{}'. Retrying in 5 seconds...", target_desc);
-        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-    };
-
-    println!("Device found. Starting bridge task...");
-
-    let mut shutdown_rx = shutdown_tx.subscribe();
-    loop {
-        let rx = shutdown_tx.subscribe();
-        let result = connect_and_setup(&current_peripheral, args.clone(), rx).await;
-
-        match result {
-            Ok(_) => {
-                println!("Bridge task completed cleanly (shutdown).");
+        
+        let mut current_peripheral = None;
+        for _ in 0..6 { // 3 seconds total
+            if let Some(p) = find_target_peripheral(&central, &args).await? {
+                current_peripheral = Some(p);
                 break;
             }
-            Err(e) => {
-                eprintln!("Disconnected or error: {}. Retrying in 5 seconds...", e);
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        }
+        let _ = central.stop_scan().await;
+
+        if let Some(peripheral) = current_peripheral {
+            println!("Device found. Starting bridge task...");
+            let rx = shutdown_tx.subscribe();
+            let result = connect_and_setup(&peripheral, args.clone(), rx).await;
+
+            match result {
+                Ok(_) => {
+                    println!("Bridge task completed cleanly (shutdown).");
+                    break;
+                }
+                Err(e) => {
+                    eprintln!("Disconnected or error: {}. Retrying in 5 seconds...", e);
+                }
             }
+        } else {
+            let target_desc = args.id.as_deref().unwrap_or(&args.name);
+            println!("No device found matching '{}'. Retrying in 5 seconds...", target_desc);
         }
 
         tokio::select! {
             _ = shutdown_rx.recv() => break,
             _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => {
-                println!("Refreshing device list before reconnection attempt...");
-                let _ = central.start_scan(ScanFilter::default()).await;
-                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                let _ = central.stop_scan().await;
-
-                if let Ok(Some(new_p)) = find_target_peripheral(&central, &args).await {
-                    current_peripheral = new_p;
-                }
+                // Next iteration will check USB and then rescan
             }
         }
     }
@@ -236,12 +258,20 @@ async fn connect_and_setup(
         }
     });
 
-    // 接続状態監視（ポリリング）
+    // 接続状態監視（ポリリング） & USB接続監視
     let peripheral_monitor = peripheral.clone();
     let disconnect_tx_monitor = disconnect_tx.clone();
     let monitor_task = tokio::spawn(async move {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+            
+            // USB接続が検出されたら切断
+            if is_microbit_usb_connected() {
+                println!("Micro:bit detected via USB. Triggering BLE disconnect.");
+                let _ = disconnect_tx_monitor.send(()).await;
+                break;
+            }
+
             if let Ok(connected) = peripheral_monitor.is_connected().await {
                 if !connected {
                     println!("Connection lost (polled).");
@@ -259,7 +289,7 @@ async fn connect_and_setup(
                 break Ok(());
             }
             _ = disconnect_rx.recv() => {
-                println!("Disconnection detected.");
+                println!("Disconnection triggered.");
                 break Err("Disconnected".into());
             }
             accept_res = listener.accept() => {

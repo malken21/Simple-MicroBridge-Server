@@ -9,4 +9,5 @@ clap = { version = "4.5.60", features = ["derive"] }
 futures = "0.3.32"
 tokio = { version = "1.50.0", features = ["full"] }
 tokio-tungstenite = "0.28.0"
+serialport = "4.7.0"
 uuid = "1.21.0"
